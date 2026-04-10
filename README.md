@@ -43,3 +43,20 @@ Le topic /target_detected publie False tant que la cible n'est pas détectée, p
 La détection a été vérifiée avec la commande ros2 topic echo /target_detected.
 
 
+## Partie 5
+
+Un package turtle_interfaces a été créé avec le service ResetMission.
+
+Le service /reset_mission permet de relancer une mission sans redémarrer les nœuds.
+
+Quand le service est appelé, l'ancienne cible est supprimée, une nouvelle cible est créée, puis le balayage recommence depuis le début.
+
+Le service peut utiliser une position aléatoire avec random_target = true ou une position fixe avec les coordonnées target_x et target_y.
+
+Vérification
+
+ros2 interface show turtle_interfaces/srv/ResetMission
+
+ros2 service call /reset_mission turtle_interfaces/srv/ResetMission "{target_x: 0.0, target_y: 0.0, random_target: true}"
+
+ros2 service call /reset_mission turtle_interfaces/srv/ResetMission "{target_x: 3.0, target_y: 8.0, random_target: false}"
