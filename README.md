@@ -15,12 +15,29 @@ Les poses sont stockées dans self.pose_scanner et self.pose_target.
 
 Verification :
 ros2 topic echo /turtle1/pose
+
 ros2 topic echo /turtle_target/pose
 
 ## Partie 3
 Les valeurs choisies pour la commande sont Kp_ang = 4.0 et Kp_lin = 1.5.
+
 Avec Kp_ang = 2.0, la tortue tourne plus lentement vers le waypoint.
+
 Avec Kp_ang = 6.0, la tortue tourne plus vite et le mouvement devient plus brusque.
+
 Avec Kp_lin = 0.8, la tortue avance plus lentement.
+
 Avec Kp_lin = 3.0, la tortue avance plus vite et peut depasser le waypoint.
+
+## Partie 4
+Le nœud détecte la cible en calculant la distance entre turtle1 et turtle_target.
+
+Un rayon de détection de 1.5 a été utilisé.
+
+Quand la distance devient plus petite que ce rayon, le balayage s'arrête et la tortue ne bouge plus.
+
+Le topic /target_detected publie False tant que la cible n'est pas détectée, puis True quand la cible est trouvée.
+
+La détection a été vérifiée avec la commande ros2 topic echo /target_detected.
+
 

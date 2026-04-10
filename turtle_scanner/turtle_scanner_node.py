@@ -3,6 +3,7 @@ import rclpy
 from rclpy.node import Node
 from turtlesim.msg import Pose
 from geometry_msgs.msg import Twist
+from std_msgs.msg import Bool
 
 class TurtleScannerNode(Node):
     def __init__(self):
@@ -13,6 +14,13 @@ class TurtleScannerNode(Node):
 
         # P2 : attribut pour stocker la pose de la cible
         self.pose_target = None
+
+        # P3 : etat du balayage
+        self.scan_finished = False
+
+        # P4 : etat de la detection
+        self.target_detected = False
+        self.detection_radius = 1.5
 
         # P2 : subscriber sur /turtle1/pose
         self.subscription_scanner = self.create_subscription(
@@ -37,6 +45,13 @@ class TurtleScannerNode(Node):
             10
         )
 
+        # P4 : publisher sur /target_detected
+        self.publisher_detected = self.create_publisher(
+            Bool,
+            '/target_detected',
+            10
+        )
+
         # P3 : parametres du serpentin
         self.nb_lignes = 5
         self.y_start = 1.0
@@ -53,7 +68,6 @@ class TurtleScannerNode(Node):
         # P3 : generation de la liste des waypoints
         self.waypoints = []
         self.current_waypoint_index = 0
-        self.scan_finished = False
 
         for i in range(self.nb_lignes):
             y = self.y_start + i * self.y_step
@@ -78,28 +92,54 @@ class TurtleScannerNode(Node):
         # P3 : calcul de l'angle entre deux points
         xA, yA = A
         xB, yB = B
-
-        theta_desired = math.atan2(yB - yA, xB - xA)
-        return theta_desired
+        return math.atan2(yB - yA, xB - xA)
 
     def compute_distance(self, A, B):
         # P3 : calcul de la distance entre deux points
         xA, yA = A
         xB, yB = B
+        return math.sqrt((xB - xA) ** 2 + (yB - yA) ** 2)
 
-        distance = math.sqrt((xB - xA) ** 2 + (yB - yA) ** 2)
-        return distance
+    def publish_detection_state(self):
+        # P4 : publication de l'etat de detection
+        detected_msg = Bool()
+        detected_msg.data = self.target_detected
+        self.publisher_detected.publish(detected_msg)
+
+    def stop_turtle(self):
+        # P4 : arret de la tortue
+        cmd = Twist()
+        self.publisher_cmd.publish(cmd)
 
     def scan_step(self):
-        # P3 : attendre la pose du scanner avant de commencer
-        if self.pose_scanner is None:
+        # P3 : attendre les poses avant de commencer
+        if self.pose_scanner is None or self.pose_target is None:
             return
+
+        # P4 : calcul de la distance entre le scanner et la cible
+        scanner_position = (self.pose_scanner.x, self.pose_scanner.y)
+        target_position = (self.pose_target.x, self.pose_target.y)
+        target_distance = self.compute_distance(scanner_position, target_position)
+
+        # P4 : detection de la cible
+        if target_distance < self.detection_radius:
+            if not self.target_detected:
+                self.target_detected = True
+                self.stop_turtle()
+                self.get_logger().info(
+                    f'Cible detectee a ({self.pose_target.x:.2f}, {self.pose_target.y:.2f}) !'
+                )
+
+            self.publish_detection_state()
+            return
+
+        # P4 : publication de False tant que la cible n'est pas detectee
+        self.publish_detection_state()
 
         # P3 : arret si tous les waypoints sont termines
         if self.current_waypoint_index >= len(self.waypoints):
             if not self.scan_finished:
-                cmd = Twist()
-                self.publisher_cmd.publish(cmd)
+                self.stop_turtle()
                 self.get_logger().info('Balayage termine')
                 self.scan_finished = True
             return
