@@ -14,6 +14,8 @@ Le noeud turtle_scanner_node.py récupère la pose de turtle1 et de turtle_targe
 Les poses sont stockées dans self.pose_scanner et self.pose_target.
 
 Verification :
+
+
 ros2 topic echo /turtle1/pose
 
 ros2 topic echo /turtle_target/pose

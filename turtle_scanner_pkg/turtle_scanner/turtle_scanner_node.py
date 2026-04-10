@@ -1,9 +1,12 @@
 import math
+import random
 import rclpy
 from rclpy.node import Node
 from turtlesim.msg import Pose
+from turtlesim.srv import Kill, Spawn
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Bool
+from turtle_interfaces.srv import ResetMission
 
 class TurtleScannerNode(Node):
     def __init__(self):
@@ -52,6 +55,17 @@ class TurtleScannerNode(Node):
             10
         )
 
+        # P5 : clients pour /spawn et /kill
+        self.spawn_client = self.create_client(Spawn, '/spawn')
+        self.kill_client = self.create_client(Kill, '/kill')
+
+        # P5 : service /reset_mission
+        self.reset_service = self.create_service(
+            ResetMission,
+            '/reset_mission',
+            self.reset_mission_callback
+        )
+
         # P3 : parametres du serpentin
         self.nb_lignes = 5
         self.y_start = 1.0
@@ -65,9 +79,19 @@ class TurtleScannerNode(Node):
         self.linear_speed_max = 2.0
         self.waypoint_tolerance = 0.3
 
-        # P3 : generation de la liste des waypoints
+        # P3 : generation des waypoints
         self.waypoints = []
         self.current_waypoint_index = 0
+        self.generate_waypoints()
+
+        # P3 : timer pour executer scan_step regulierement
+        self.timer = self.create_timer(0.05, self.scan_step)
+
+    def generate_waypoints(self):
+        # P5 : reinitialisation de la liste des waypoints
+        self.waypoints = []
+        self.current_waypoint_index = 0
+        self.scan_finished = False
 
         for i in range(self.nb_lignes):
             y = self.y_start + i * self.y_step
@@ -76,9 +100,6 @@ class TurtleScannerNode(Node):
                 self.waypoints.append((self.x_max, y))
             else:
                 self.waypoints.append((self.x_min, y))
-
-        # P3 : timer pour executer scan_step regulierement
-        self.timer = self.create_timer(0.05, self.scan_step)
 
     def pose_scanner_callback(self, msg):
         # P2 : mise a jour de la pose du scanner
@@ -110,6 +131,65 @@ class TurtleScannerNode(Node):
         # P4 : arret de la tortue
         cmd = Twist()
         self.publisher_cmd.publish(cmd)
+
+    def kill_target(self):
+        # P5 : suppression de l'ancienne cible
+        if not self.kill_client.wait_for_service(timeout_sec=1.0):
+            return
+
+        request = Kill.Request()
+        request.name = 'turtle_target'
+        future = self.kill_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+    def spawn_target(self, x, y):
+        # P5 : creation d'une nouvelle cible
+        if not self.spawn_client.wait_for_service(timeout_sec=1.0):
+            return False
+
+        request = Spawn.Request()
+        request.x = x
+        request.y = y
+        request.theta = 0.0
+        request.name = 'turtle_target'
+
+        future = self.spawn_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+        return future.result() is not None
+
+    def reset_mission_callback(self, request, response):
+        # P5 : arret du scanner avant reset
+        self.stop_turtle()
+
+        # P5 : suppression de la cible actuelle
+        self.kill_target()
+
+        # P5 : choix de la nouvelle position
+        if request.random_target:
+            target_x = random.uniform(1.0, 10.0)
+            target_y = random.uniform(1.0, 10.0)
+        else:
+            target_x = request.target_x
+            target_y = request.target_y
+
+        # P5 : creation de la nouvelle cible
+        success = self.spawn_target(target_x, target_y)
+
+        if success:
+            self.target_detected = False
+            self.pose_target = None
+            self.generate_waypoints()
+
+            response.success = True
+            response.message = (
+                f'Mission reinitialisee avec une cible en x={target_x:.2f}, y={target_y:.2f}'
+            )
+        else:
+            response.success = False
+            response.message = 'Echec de la reinitialisation de la mission'
+
+        return response
 
     def scan_step(self):
         # P3 : attendre les poses avant de commencer
